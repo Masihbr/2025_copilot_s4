@@ -34,7 +34,7 @@ interface AuthApi {
     @POST("/auth/")
     suspend fun authenticate(@Body body: AuthRequest): Response<AuthResponse>
 
-    @POST("/auth/refresh-token")
+    @POST("/auth/refresh")
     suspend fun refreshToken(@Body body: RefreshTokenRequest): Response<RefreshTokenResponse>
 }
 

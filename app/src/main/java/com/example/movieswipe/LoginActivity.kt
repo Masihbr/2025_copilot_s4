@@ -2,6 +2,7 @@ package com.example.movieswipe
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Base64
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -10,28 +11,33 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Button
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.example.movieswipe.ui.theme.MovieSwipeTheme
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.lifecycle.lifecycleScope
+import com.example.movieswipe.data.TokenManager
+import com.example.movieswipe.network.ApiService
+import com.example.movieswipe.ui.components.BasicAlertDialog
+import com.example.movieswipe.ui.theme.MovieSwipeTheme
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.example.movieswipe.network.ApiService
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
-import com.example.movieswipe.data.TokenManager
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class LoginActivity : ComponentActivity() {
     private val webClientId: String
@@ -42,19 +48,29 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val tokenManager = TokenManager.getInstance(this)
-        val accessToken = tokenManager.getAccessToken()
-        val refreshToken = tokenManager.getRefreshToken()
-        if (!accessToken.isNullOrEmpty() && !refreshToken.isNullOrEmpty()) {
-            // TODO: Optionally validate token with backend or check expiry
-            Log.d(TAG, "Tokens found, bypassing login.")
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            })
-            return
-        }
         setContent {
             val snackbarHostState = remember { SnackbarHostState() }
             var snackbarMessage by remember { mutableStateOf("") }
+            var showLoader by remember { mutableStateOf(false) }
+            var loaderMsg by remember { mutableStateOf("") }
+            LaunchedEffect(Unit) {
+                showLoader = true
+                loaderMsg = "Checking access..."
+                val bypass = withContext(Dispatchers.IO) {
+                    checkAndHandleTokenExpiry(tokenManager, { showLoader = it }, { loaderMsg = it })
+                }
+                delay(1000) // Add a small delay for smoother transition
+                showLoader = false
+                if (bypass && !tokenManager.getAccessToken().isNullOrEmpty() && !tokenManager.getRefreshToken().isNullOrEmpty()) {
+                    Log.d(TAG, "Tokens valid, bypassing login.")
+                    delay(500) // Add a small delay before navigating to MainActivity
+                    startActivity(Intent(this@LoginActivity, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    })
+                } else {
+                    snackbarMessage = "Tokens are expired, log in again please!"
+                }
+            }
             LaunchedEffect(snackbarMessage) {
                 if (snackbarMessage.isNotEmpty()) {
                     snackbarHostState.showSnackbar(snackbarMessage)
@@ -66,6 +82,13 @@ class LoginActivity : ComponentActivity() {
                     LoginScreen(onLoginClick = {
                         signInWithGoogle(snackbarHostStateSetter = { snackbarMessage = it })
                     })
+                    BasicAlertDialog(
+                        show = showLoader,
+                        title = null,
+                        message = loaderMsg,
+                        showLoader = true,
+                        onDismiss = null
+                    )
                     androidx.compose.material3.SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
                 }
             }
@@ -186,5 +209,68 @@ fun LoginScreen(onLoginClick: () -> Unit) {
         Button(onClick = onLoginClick, modifier = Modifier.wrapContentSize()) {
             Text(text = "Login")
         }
+    }
+}
+
+private suspend fun checkAndHandleTokenExpiry(
+    tokenManager: TokenManager,
+    showLoader: (Boolean) -> Unit,
+    loaderMessage: (String) -> Unit
+): Boolean {
+    val accessToken = tokenManager.getAccessToken()
+    val refreshToken = tokenManager.getRefreshToken()
+    val threshold = BuildConfig.EXPIRATION_THRESHOLD_SECONDS
+    fun getExpiry(token: String?): Long? {
+        if (token.isNullOrEmpty()) return null
+        return try {
+            val parts = token.split(".")
+            if (parts.size < 2) return null
+            val payload = String(Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP))
+            val json = JSONObject(payload)
+            json.optLong("exp", 0)
+        } catch (e: Exception) { null }
+    }
+    val now = System.currentTimeMillis() / 1000
+    val accessExp = getExpiry(accessToken)
+    val refreshExp = getExpiry(refreshToken)
+    Log.d("TokenCheck", "now: $now, accessExp: $accessExp, refreshExp: $refreshExp, threshold: $threshold")
+    if (accessExp != null) {
+        Log.d("TokenCheck", "Access token seconds to expiry: ${accessExp - now}")
+    }
+    if (refreshExp != null) {
+        Log.d("TokenCheck", "Refresh token seconds to expiry: ${refreshExp - now}")
+    }
+    if (accessExp != null && accessExp - now > threshold) {
+        // Access token valid
+        return true
+    }
+    // Access token expired or about to expire
+    if (refreshExp == null || refreshExp - now <= threshold) {
+        // Refresh token also expired/about to expire
+        withContext(Dispatchers.Main) { tokenManager.clearTokens() }
+        return false
+    }
+    // Try to refresh access token
+    withContext(Dispatchers.Main) {
+        showLoader(true)
+        loaderMessage("Logging in...")
+    }
+    return try {
+        val result = ApiService.refreshToken(refreshToken!!)
+        if (result.isSuccess) {
+            val newAccessToken = result.getOrNull()
+            if (newAccessToken != null) {
+                withContext(Dispatchers.Main) { tokenManager.saveTokens(newAccessToken, refreshToken) }
+                true
+            } else {
+                withContext(Dispatchers.Main) { tokenManager.clearTokens() }
+                false
+            }
+        } else {
+            withContext(Dispatchers.Main) { tokenManager.clearTokens() }
+            false
+        }
+    } finally {
+        withContext(Dispatchers.Main) { showLoader(false) }
     }
 }

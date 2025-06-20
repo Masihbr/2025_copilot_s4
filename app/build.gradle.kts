@@ -13,6 +13,7 @@ if (localPropertiesFile.exists()) {
 }
 val googleWebClientId = localProperties.getProperty("googleWebClientId") ?: ""
 val backendBaseUrl = localProperties.getProperty("backendBaseUrl") ?: "https://your-backend-url.com"
+val expirationThresholdSeconds = localProperties.getProperty("expirationThresholdSeconds") ?: "300"
 
 android {
     namespace = "com.example.movieswipe"
@@ -28,6 +29,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
+        buildConfigField("int", "EXPIRATION_THRESHOLD_SECONDS", expirationThresholdSeconds)
     }
 
     buildTypes {
