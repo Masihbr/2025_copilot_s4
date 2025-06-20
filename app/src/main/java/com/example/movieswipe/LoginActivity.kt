@@ -27,7 +27,7 @@ import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.lifecycleScope
 import com.example.movieswipe.data.TokenManager
-import com.example.movieswipe.network.ApiService
+import com.example.movieswipe.network.AuthService
 import com.example.movieswipe.ui.components.BasicAlertDialog
 import com.example.movieswipe.ui.theme.MovieSwipeTheme
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -170,7 +170,7 @@ class LoginActivity : ComponentActivity() {
                 // Call backend API to authenticate
                 lifecycleScope.launch {
                     snackbarHostStateSetter("Authenticating with backend...")
-                    val apiResult = ApiService.authenticateWithGoogleToken(idToken)
+                    val apiResult = AuthService.authenticateWithGoogleToken(idToken)
                     apiResult.onSuccess { tokens ->
                         Log.d(TAG, "Received JWT access token: ${tokens.accessToken}")
                         Log.d(TAG, "Received JWT refresh token: ${tokens.refreshToken}")
@@ -256,7 +256,7 @@ private suspend fun checkAndHandleTokenExpiry(
         loaderMessage("Logging in...")
     }
     return try {
-        val result = ApiService.refreshToken(refreshToken!!)
+        val result = AuthService.refreshToken(refreshToken!!)
         if (result.isSuccess) {
             val newAccessToken = result.getOrNull()
             if (newAccessToken != null) {

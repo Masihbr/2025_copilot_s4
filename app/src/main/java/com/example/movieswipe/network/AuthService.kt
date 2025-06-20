@@ -29,7 +29,6 @@ data class RefreshTokenData(
 )
 data class AuthTokens(val accessToken: String, val refreshToken: String)
 
-// --- Retrofit API Interface ---
 interface AuthApi {
     @POST("/auth/")
     suspend fun authenticate(@Body body: AuthRequest): Response<AuthResponse>
@@ -38,7 +37,7 @@ interface AuthApi {
     suspend fun refreshToken(@Body body: RefreshTokenRequest): Response<RefreshTokenResponse>
 }
 
-object ApiService {
+object AuthService {
     private const val BASE_URL = BuildConfig.BACKEND_BASE_URL
     private val retrofit: Retrofit = Retrofit.Builder()
         .baseUrl(BASE_URL)
@@ -63,7 +62,7 @@ object ApiService {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e("ApiService", "Auth error", e)
+            Log.e("AuthService", "Auth error", e)
             Result.failure(e)
         }
     }
@@ -83,8 +82,9 @@ object ApiService {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e("ApiService", "Refresh error", e)
+            Log.e("AuthService", "Refresh error", e)
             Result.failure(e)
         }
     }
 }
+
