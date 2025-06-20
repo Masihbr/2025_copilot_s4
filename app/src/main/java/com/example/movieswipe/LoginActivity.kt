@@ -24,6 +24,13 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import com.example.movieswipe.network.ApiService
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 
 class LoginActivity : ComponentActivity() {
     private val webClientId: String
@@ -34,15 +41,26 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            val snackbarHostState = remember { SnackbarHostState() }
+            var snackbarMessage by remember { mutableStateOf("") }
+            LaunchedEffect(snackbarMessage) {
+                if (snackbarMessage.isNotEmpty()) {
+                    snackbarHostState.showSnackbar(snackbarMessage)
+                    snackbarMessage = ""
+                }
+            }
             MovieSwipeTheme {
-                LoginScreen(onLoginClick = {
-                    signInWithGoogle()
-                })
+                Box(Modifier.fillMaxSize()) {
+                    LoginScreen(onLoginClick = {
+                        signInWithGoogle(snackbarHostStateSetter = { snackbarMessage = it })
+                    })
+                    androidx.compose.material3.SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+                }
             }
         }
     }
 
-    private fun signInWithGoogle() {
+    private fun signInWithGoogle(snackbarHostStateSetter: (String) -> Unit = {}) {
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(true)
             .setServerClientId(webClientId)
@@ -59,19 +77,20 @@ class LoginActivity : ComponentActivity() {
                     context = this@LoginActivity
                 )
                 Log.d(TAG, "Google sign-in success: $result")
-                handleSignIn(result)
+                handleSignIn(result, snackbarHostStateSetter)
             } catch (e: GetCredentialException) {
                 Log.w(TAG, "No authorized accounts found, falling back to sign-up flow.")
                 Log.e(TAG, "Google sign-in error (sign-in): ${e.localizedMessage}", e)
                 // If no authorized accounts, try sign-up flow
-                signUpWithGoogle()
+                signUpWithGoogle(snackbarHostStateSetter)
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected error in signInWithGoogle: ${e.localizedMessage}", e)
+                snackbarHostStateSetter("Sign-in failed: ${e.localizedMessage}")
             }
         }
     }
 
-    private fun signUpWithGoogle() {
+    private fun signUpWithGoogle(snackbarHostStateSetter: (String) -> Unit = {}) {
         Log.d(TAG, "signUpWithGoogle")
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
@@ -88,9 +107,10 @@ class LoginActivity : ComponentActivity() {
                     context = this@LoginActivity
                 )
                 Log.d(TAG, "Google sign-up success: $result")
-                handleSignIn(result)
+                handleSignIn(result, snackbarHostStateSetter)
             } catch (e: GetCredentialException) {
                 Log.e(TAG, "Google sign-in error (sign-up): ${e.localizedMessage}", e)
+                snackbarHostStateSetter("Google sign-in failed: ${e.localizedMessage}")
                 Toast.makeText(
                     this@LoginActivity,
                     "Google sign-in failed: ${e.localizedMessage}",
@@ -98,11 +118,12 @@ class LoginActivity : ComponentActivity() {
                 ).show()
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected error in signUpWithGoogle: ${e.localizedMessage}", e)
+                snackbarHostStateSetter("Sign-up failed: ${e.localizedMessage}")
             }
         }
     }
 
-    private fun handleSignIn(result: GetCredentialResponse) {
+    private fun handleSignIn(result: GetCredentialResponse, snackbarHostStateSetter: (String) -> Unit = {}) {
         val credential = result.credential
         if (credential is androidx.credentials.CustomCredential &&
             credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
@@ -111,18 +132,31 @@ class LoginActivity : ComponentActivity() {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                 val idToken = googleIdTokenCredential.idToken
                 Log.d(TAG, "Google ID token received: $idToken")
-                // TODO: Validate idToken on your backend
-                val intent = Intent(this, MainActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
+                // Call backend API to authenticate
+                lifecycleScope.launch {
+                    snackbarHostStateSetter("Authenticating with backend...")
+                    val apiResult = ApiService.authenticateWithGoogleToken(idToken)
+                    apiResult.onSuccess { token ->
+                        Log.d(TAG, "Received JWT token: $token")
+                        val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        startActivity(intent)
+                    }.onFailure { e ->
+                        Log.e(TAG, "Backend auth failed: ${e.localizedMessage}", e)
+                        snackbarHostStateSetter("Backend auth failed: ${e.localizedMessage}")
+                    }
+                }
             } catch (e: GoogleIdTokenParsingException) {
                 Log.e(TAG, "Invalid Google ID token", e)
+                snackbarHostStateSetter("Invalid Google ID token")
                 Toast.makeText(this, "Invalid Google ID token", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected error in handleSignIn: ${e.localizedMessage}", e)
+                snackbarHostStateSetter("Sign-in error: ${e.localizedMessage}")
             }
         } else {
             Log.e(TAG, "Unexpected credential type: ${credential::class.java.simpleName}")
+            snackbarHostStateSetter("Unexpected credential type")
             Toast.makeText(this, "Unexpected credential type", Toast.LENGTH_SHORT).show()
         }
     }

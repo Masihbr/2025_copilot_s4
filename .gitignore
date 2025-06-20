@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Ignore generated network security config
+app/src/main/res/xml/network_security_config.xml
