@@ -28,7 +28,7 @@
             android:exported="true"
             android:theme="@style/Theme.MovieSwipe" />
         <activity
-            android:name=".CreateGroupActivity"
+            android:name=".GroupDetailsActivity"
             android:exported="false"
             android:theme="@style/Theme.MovieSwipe" />
         <activity

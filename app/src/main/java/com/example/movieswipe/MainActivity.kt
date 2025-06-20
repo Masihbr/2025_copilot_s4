@@ -20,6 +20,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.movieswipe.ui.theme.MovieSwipeTheme
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
+import com.example.movieswipe.data.TokenManager
+import com.example.movieswipe.network.GroupService
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +52,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
 @Composable
 fun GroupButtonsView(modifier: Modifier = Modifier) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -55,7 +60,24 @@ fun GroupButtonsView(modifier: Modifier = Modifier) {
     ) {
         PrimaryButton(
             text = "Create Group",
-            onClick = { context.startActivity(Intent(context, CreateGroupActivity::class.java)) }
+            onClick = {
+                coroutineScope.launch {
+                    val tokenManager = TokenManager.getInstance(context)
+                    val accessToken = tokenManager.getAccessToken()
+                    if (accessToken.isNullOrEmpty()) {
+                        // Show error or redirect to login
+                        return@launch
+                    }
+                    val result = GroupService.createGroup(accessToken)
+                    result.onSuccess { group ->
+                        val intent = Intent(context, GroupDetailsActivity::class.java)
+                        intent.putExtra("groupId", group._id)
+                        context.startActivity(intent)
+                    }.onFailure {
+                        // Handle error (show snackbar, etc.)
+                    }
+                }
+            }
         )
         Spacer(modifier = Modifier.height(16.dp))
         PrimaryButton(
