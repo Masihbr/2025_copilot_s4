@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
+import com.example.movieswipe.ui.components.PrimaryButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,17 +53,15 @@ fun GroupButtonsView(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Button(onClick = {
-            context.startActivity(Intent(context, CreateGroupActivity::class.java))
-        }) {
-            Text("Create Group")
-        }
+        PrimaryButton(
+            text = "Create Group",
+            onClick = { context.startActivity(Intent(context, CreateGroupActivity::class.java)) }
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = {
-            context.startActivity(Intent(context, JoinGroupActivity::class.java))
-        }) {
-            Text("Join Group")
-        }
+        PrimaryButton(
+            text = "Join Group",
+            onClick = { context.startActivity(Intent(context, JoinGroupActivity::class.java)) }
+        )
     }
 }
 
