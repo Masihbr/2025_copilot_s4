@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import com.example.movieswipe.data.TokenManager
 
 class LoginActivity : ComponentActivity() {
     private val webClientId: String
@@ -40,6 +41,17 @@ class LoginActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val tokenManager = TokenManager.getInstance(this)
+        val accessToken = tokenManager.getAccessToken()
+        val refreshToken = tokenManager.getRefreshToken()
+        if (!accessToken.isNullOrEmpty() && !refreshToken.isNullOrEmpty()) {
+            // TODO: Optionally validate token with backend or check expiry
+            Log.d(TAG, "Tokens found, bypassing login.")
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
+            return
+        }
         setContent {
             val snackbarHostState = remember { SnackbarHostState() }
             var snackbarMessage by remember { mutableStateOf("") }
@@ -136,8 +148,11 @@ class LoginActivity : ComponentActivity() {
                 lifecycleScope.launch {
                     snackbarHostStateSetter("Authenticating with backend...")
                     val apiResult = ApiService.authenticateWithGoogleToken(idToken)
-                    apiResult.onSuccess { token ->
-                        Log.d(TAG, "Received JWT token: $token")
+                    apiResult.onSuccess { tokens ->
+                        Log.d(TAG, "Received JWT access token: ${tokens.accessToken}")
+                        Log.d(TAG, "Received JWT refresh token: ${tokens.refreshToken}")
+                        val tokenManager = TokenManager.getInstance(this@LoginActivity)
+                        tokenManager.saveTokens(tokens.accessToken, tokens.refreshToken)
                         val intent = Intent(this@LoginActivity, MainActivity::class.java)
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                         startActivity(intent)

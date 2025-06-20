@@ -27,6 +27,7 @@ data class RefreshTokenResponse(
 data class RefreshTokenData(
     val token: String?
 )
+data class AuthTokens(val accessToken: String, val refreshToken: String)
 
 // --- Retrofit API Interface ---
 interface AuthApi {
@@ -45,15 +46,17 @@ object ApiService {
         .build()
     private val authApi: AuthApi = retrofit.create(AuthApi::class.java)
 
-    suspend fun authenticateWithGoogleToken(googleToken: String): Result<String> {
+    suspend fun authenticateWithGoogleToken(googleToken: String): Result<AuthTokens> {
         return try {
             val response = authApi.authenticate(AuthRequest(googleToken))
             if (response.isSuccessful) {
-                val token = response.body()?.data?.token
-                if (token != null) {
-                    Result.success(token)
+                val data = response.body()?.data
+                val accessToken = data?.token
+                val refreshToken = data?.refreshToken
+                if (!accessToken.isNullOrEmpty() && !refreshToken.isNullOrEmpty()) {
+                    Result.success(AuthTokens(accessToken, refreshToken))
                 } else {
-                    Result.failure(Exception("No token in response"))
+                    Result.failure(Exception("No access or refresh token in response"))
                 }
             } else {
                 val errorMsg = response.errorBody()?.string() ?: response.message()
