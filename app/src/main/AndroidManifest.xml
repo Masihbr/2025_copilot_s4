@@ -24,6 +24,14 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.MovieSwipe" />
+        <activity
+            android:name=".CreateGroupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MovieSwipe" />
+        <activity
+            android:name=".JoinGroupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MovieSwipe" />
     </application>
 
 </manifest>
