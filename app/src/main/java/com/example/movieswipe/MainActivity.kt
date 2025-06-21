@@ -62,13 +62,7 @@ fun GroupButtonsView(modifier: Modifier = Modifier) {
             text = "Create Group",
             onClick = {
                 coroutineScope.launch {
-                    val tokenManager = TokenManager.getInstance(context)
-                    val accessToken = tokenManager.getAccessToken()
-                    if (accessToken.isNullOrEmpty()) {
-                        // Show error or redirect to login
-                        return@launch
-                    }
-                    val result = GroupService.createGroup(accessToken)
+                    val result = GroupService.createGroup(context)
                     result.onSuccess { group ->
                         val intent = Intent(context, GroupDetailsActivity::class.java)
                         intent.putExtra("groupId", group._id)

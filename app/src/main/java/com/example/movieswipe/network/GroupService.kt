@@ -1,7 +1,9 @@
 package com.example.movieswipe.network
 
+import android.content.Context
 import android.util.Log
 import com.example.movieswipe.BuildConfig
+import okhttp3.OkHttpClient
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -51,16 +53,22 @@ interface GroupApi {
 }
 
 object GroupService {
-    private const val BASE_URL = BuildConfig.BACKEND_BASE_URL
-    private val retrofit: Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    private val groupApi: GroupApi = retrofit.create(GroupApi::class.java)
+    private fun getRetrofit(context: Context): Retrofit {
+        val client = OkHttpClient.Builder()
+            .addInterceptor(AuthInterceptor(context))
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.BACKEND_BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+    }
+    private fun getApi(context: Context): GroupApi = getRetrofit(context).create(GroupApi::class.java)
 
-    suspend fun createGroup(accessToken: String): Result<Group> {
+    suspend fun createGroup(context: Context): Result<Group> {
         return try {
-            val response = groupApi.createGroup("Bearer $accessToken")
+            val groupApi = getApi(context)
+            val response = groupApi.createGroup("") // Auth header handled by interceptor
             if (response.isSuccessful) {
                 val group = response.body()?.data
                 if (group != null) Result.success(group)
@@ -75,9 +83,10 @@ object GroupService {
         }
     }
 
-    suspend fun getGroups(accessToken: String): Result<List<Group>> {
+    suspend fun getGroups(context: Context): Result<List<Group>> {
         return try {
-            val response = groupApi.getGroups("Bearer $accessToken")
+            val groupApi = getApi(context)
+            val response = groupApi.getGroups("")
             if (response.isSuccessful) {
                 val groups = response.body()?.data
                 if (groups != null) Result.success(groups)
@@ -92,9 +101,10 @@ object GroupService {
         }
     }
 
-    suspend fun getGroupById(accessToken: String, groupId: String): Result<Group> {
+    suspend fun getGroupById(context: Context, groupId: String): Result<Group> {
         return try {
-            val response = groupApi.getGroupById("Bearer $accessToken", groupId)
+            val groupApi = getApi(context)
+            val response = groupApi.getGroupById("", groupId)
             if (response.isSuccessful) {
                 val group = response.body()?.data
                 if (group != null) Result.success(group)
@@ -109,4 +119,3 @@ object GroupService {
         }
     }
 }
-

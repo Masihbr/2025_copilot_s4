@@ -41,7 +41,7 @@ fun GroupDetailsScreen(groupId: String?) {
             val tokenManager = TokenManager.getInstance(context)
             val accessToken = tokenManager.getAccessToken()
             if (!accessToken.isNullOrEmpty()) {
-                val result = GroupService.getGroupById(accessToken, groupId)
+                val result = GroupService.getGroupById(context, groupId)
                 result.onSuccess { groupState.value = it }
                 result.onFailure { errorState.value = it.localizedMessage }
             } else {
